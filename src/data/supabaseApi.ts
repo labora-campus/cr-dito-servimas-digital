@@ -270,3 +270,22 @@ export async function deleteCortinero(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
+export async function updateCortinero(id: string, args: {
+  nombre?: string;
+  zona?: string;
+  telefono?: string;
+  limiteCredito?: number;
+}): Promise<void> {
+  const { error } = await supabase
+    .from("cortineros")
+    .update({
+      nombre: args.nombre,
+      zona: args.zona,
+      telefono: args.telefono || null,
+      limite_credito: args.limiteCredito,
+    })
+    .eq("id", id);
+
+  if (error) throw error;
+}
