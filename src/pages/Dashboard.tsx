@@ -1,16 +1,90 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { TrendingDown, Users, ArrowUpCircle, ArrowDownCircle, ChevronRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { StatCard } from '@/components/StatCard';
-import { cortineros, movimientos } from '@/data/mockData';
+import { getCortineros, getRecentMovimientos } from '@/data/supabaseApi';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { useAuth } from '@/auth/AuthProvider';
 
 export default function Dashboard() {
+  const { user, loading: authLoading } = useAuth();
+
+  const {
+    data: cortineros = [],
+    isLoading: loadingCortineros,
+    isError: isCortinerosError,
+    error: cortinerosError,
+  } = useQuery({
+    queryKey: ['cortineros', user?.id],
+    queryFn: getCortineros,
+    enabled: !authLoading && Boolean(user),
+  });
+
+  const {
+    data: movimientos = [],
+    isLoading: loadingMovimientos,
+    isError: isMovimientosError,
+    error: movimientosError,
+  } = useQuery({
+    queryKey: ['movimientos', 'recent', user?.id],
+    queryFn: () => getRecentMovimientos(50),
+    enabled: !authLoading && Boolean(user),
+  });
+
+  if (isCortinerosError || isMovimientosError) {
+    const message =
+      (cortinerosError instanceof Error ? cortinerosError.message : '') ||
+      (movimientosError instanceof Error ? movimientosError.message : '') ||
+      'No se pudieron cargar los datos';
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">Vista general de cuentas corrientes</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 text-sm text-destructive">
+          {message}
+        </div>
+      </div>
+    );
+  }
+
+  const [showSlowLoading, setShowSlowLoading] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loadingCortineros || loadingMovimientos) {
+        setShowSlowLoading(true);
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [loadingCortineros, loadingMovimientos]);
+
+  if (loadingCortineros || loadingMovimientos) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <div className="flex flex-col gap-2 mt-1">
+            <p className="text-muted-foreground">Cargando datos...</p>
+            {showSlowLoading && (
+              <p className="text-amber-500 text-sm">
+                Esto está tardando más de lo habitual. Por favor verifique su conexión a internet.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Calculate stats
   const totalDeuda = cortineros.reduce((acc, c) => acc + (c.saldo < 0 ? Math.abs(c.saldo) : 0), 0);
   const cortinerosConDeuda = cortineros.filter((c) => c.saldo < 0).length;
   const ultimosPagos = movimientos.filter((m) => m.tipo === 'pago').slice(0, 5);
   const ultimasEntregas = movimientos.filter((m) => m.tipo === 'entrega').slice(0, 5);
-  
+
   // Top debtors
   const topDeudores = [...cortineros]
     .filter((c) => c.saldo < 0)
@@ -103,7 +177,6 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-foreground mb-6">Actividad Reciente</h2>
           <div className="space-y-4">
             {[...movimientos]
-              .sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
               .slice(0, 6)
               .map((mov) => {
                 const cortinero = cortineros.find((c) => c.id === mov.cortineroId);

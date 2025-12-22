@@ -19,6 +19,7 @@ export interface Movimiento {
   saldoResultante: number;
   metodoPago?: string;
   nota?: string;
+  createdAt: Date;
 }
 
 export type FiltroTipo = 'todos' | 'deben' | 'al-dia' | 'deuda-alta' | 'pagos-recientes';

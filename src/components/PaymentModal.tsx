@@ -11,7 +11,7 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   cortineroNombre: string;
-  onSubmit: (data: { monto: number; metodoPago: string; comentarios: string; fecha: string }) => void;
+  onSubmit: (data: { monto: number; metodoPago: string; comentarios: string; fecha: string }) => void | Promise<void>;
 }
 
 export function PaymentModal({ isOpen, onClose, cortineroNombre, onSubmit }: PaymentModalProps) {
@@ -19,10 +19,11 @@ export function PaymentModal({ isOpen, onClose, cortineroNombre, onSubmit }: Pay
   const [metodoPago, setMetodoPago] = useState('');
   const [comentarios, setComentarios] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!monto || !metodoPago) {
       toast({
@@ -32,16 +33,24 @@ export function PaymentModal({ isOpen, onClose, cortineroNombre, onSubmit }: Pay
       });
       return;
     }
-    onSubmit({
-      monto: parseFloat(monto),
-      metodoPago,
-      comentarios,
-      fecha,
-    });
-    setMonto('');
-    setMetodoPago('');
-    setComentarios('');
-    onClose();
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        monto: parseFloat(monto),
+        metodoPago,
+        comentarios,
+        fecha,
+      });
+      setMonto('');
+      setMetodoPago('');
+      setComentarios('');
+      onClose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo registrar el pago';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -115,11 +124,11 @@ export function PaymentModal({ isOpen, onClose, cortineroNombre, onSubmit }: Pay
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={submitting}>
               Cancelar
             </Button>
-            <Button type="submit" className="flex-1 bg-success hover:bg-success/90 text-success-foreground">
-              Registrar Pago
+            <Button type="submit" className="flex-1 bg-success hover:bg-success/90 text-success-foreground" disabled={submitting}>
+              {submitting ? 'Registrando...' : 'Registrar Pago'}
             </Button>
           </div>
         </form>

@@ -21,9 +21,7 @@ export function Layout({ children }: LayoutProps) {
       <header className="sticky top-0 z-50 w-full border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">S</span>
-            </div>
+            <img src="/logo_new.png" alt="Servimas Logo" className="h-12 w-auto object-contain" />
             <div className="hidden sm:block">
               <h1 className="text-xl font-bold text-foreground">Servimas</h1>
               <p className="text-xs text-muted-foreground -mt-0.5">Créditos</p>
@@ -32,7 +30,7 @@ export function Layout({ children }: LayoutProps) {
 
           <nav className="flex items-center gap-1">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.to || 
+              const isActive = location.pathname === item.to ||
                 (item.to !== '/' && location.pathname.startsWith(item.to));
               return (
                 <Link

@@ -1,11 +1,15 @@
 import { useState, useMemo } from 'react';
 import { Search, Filter, Users } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { CortineroCard } from '@/components/CortineroCard';
-import { cortineros } from '@/data/mockData';
+import { CreateCortineroModal } from '@/components/CreateCortineroModal';
+import { getCortineros, createCortinero } from '@/data/supabaseApi';
 import { FiltroTipo } from '@/types/cortinero';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/auth/AuthProvider';
+import { toast } from '@/hooks/use-toast';
 
 const filtros: { value: FiltroTipo; label: string }[] = [
   { value: 'todos', label: 'Todos' },
@@ -18,6 +22,44 @@ const filtros: { value: FiltroTipo; label: string }[] = [
 export default function CortinerosList() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroActivo, setFiltroActivo] = useState<FiltroTipo>('todos');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
+
+  const {
+    data: cortineros = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ['cortineros', user?.id],
+    queryFn: getCortineros,
+    enabled: !authLoading && Boolean(user),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createCortinero,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cortineros'] });
+      toast({
+        title: 'Cortinero creado',
+        description: 'El nuevo cortinero ha sido registrado correctamente.',
+      });
+      setShowCreateModal(false);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'No se pudo crear el cortinero',
+        variant: 'destructive',
+      });
+    }
+  });
+
+  const handleCreate = async (data: { nombre: string; zona: string; telefono?: string; limiteCredito: number }) => {
+    await createMutation.mutateAsync(data);
+  };
 
   const cortinerosFiltrados = useMemo(() => {
     let resultado = [...cortineros];
@@ -52,7 +94,20 @@ export default function CortinerosList() {
     resultado.sort((a, b) => a.saldo - b.saldo);
 
     return resultado;
-  }, [busqueda, filtroActivo]);
+  }, [busqueda, filtroActivo, cortineros]);
+
+  if (isError) {
+    const message = error instanceof Error ? error.message : 'No se pudieron cargar los cortineros';
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Cortineros</h1>
+          <p className="text-muted-foreground mt-1">Error</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 text-sm text-destructive">{message}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -61,10 +116,10 @@ export default function CortinerosList() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Cortineros</h1>
           <p className="text-muted-foreground mt-1">
-            {cortineros.length} cortineros registrados
+            {isLoading ? 'Cargando...' : `${cortineros.length} cortineros registrados`}
           </p>
         </div>
-        <Button className="w-full sm:w-auto">
+        <Button className="w-full sm:w-auto" onClick={() => setShowCreateModal(true)}>
           <Users className="h-4 w-4 mr-2" />
           Nuevo Cortinero
         </Button>
@@ -102,7 +157,9 @@ export default function CortinerosList() {
       </div>
 
       {/* Results */}
-      {cortinerosFiltrados.length === 0 ? (
+      {isLoading ? (
+        <div className="text-muted-foreground">Cargando...</div>
+      ) : cortinerosFiltrados.length === 0 ? (
         <div className="text-center py-16">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium text-foreground">No se encontraron cortineros</h3>
@@ -117,6 +174,12 @@ export default function CortinerosList() {
           ))}
         </div>
       )}
+
+      <CreateCortineroModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreate}
+      />
     </div>
   );
 }

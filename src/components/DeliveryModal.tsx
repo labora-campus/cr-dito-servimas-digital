@@ -10,17 +10,20 @@ interface DeliveryModalProps {
   isOpen: boolean;
   onClose: () => void;
   cortineroNombre: string;
-  onSubmit: (data: { monto: number; descripcion: string; fecha: string }) => void;
+  onSubmit: (data: { monto: number; descripcion: string; fecha: string; pagoInicial?: number; metodoPago?: string }) => void | Promise<void>;
 }
 
 export function DeliveryModal({ isOpen, onClose, cortineroNombre, onSubmit }: DeliveryModalProps) {
   const [monto, setMonto] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [pagoInicial, setPagoInicial] = useState('');
+  const [metodoPago, setMetodoPago] = useState('efectivo');
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!monto || !descripcion) {
       toast({
@@ -30,14 +33,26 @@ export function DeliveryModal({ isOpen, onClose, cortineroNombre, onSubmit }: De
       });
       return;
     }
-    onSubmit({
-      monto: parseFloat(monto),
-      descripcion,
-      fecha,
-    });
-    setMonto('');
-    setDescripcion('');
-    onClose();
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        monto: parseFloat(monto),
+        descripcion,
+        fecha,
+        pagoInicial: pagoInicial ? parseFloat(pagoInicial) : undefined,
+        metodoPago: pagoInicial ? metodoPago : undefined,
+      });
+      setMonto('');
+      setDescripcion('');
+      setPagoInicial('');
+      setMetodoPago('efectivo');
+      onClose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo registrar la entrega';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -73,7 +88,7 @@ export function DeliveryModal({ isOpen, onClose, cortineroNombre, onSubmit }: De
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="monto">Monto *</Label>
+              <Label htmlFor="monto">Monto Total *</Label>
               <Input
                 id="monto"
                 type="number"
@@ -81,6 +96,35 @@ export function DeliveryModal({ isOpen, onClose, cortineroNombre, onSubmit }: De
                 value={monto}
                 onChange={(e) => setMonto(e.target.value)}
               />
+            </div>
+          </div>
+
+          <div className="p-4 bg-muted/30 rounded-lg border border-border/50 space-y-4">
+            <h3 className="text-sm font-medium text-foreground">Pago Inicial (Opcional)</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="pagoInicial">Monto a pagar ahora</Label>
+                <Input
+                  id="pagoInicial"
+                  type="number"
+                  placeholder="0.00"
+                  value={pagoInicial}
+                  onChange={(e) => setPagoInicial(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="metodoPago">Método de Pago</Label>
+                <select
+                  id="metodoPago"
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={metodoPago}
+                  onChange={(e) => setMetodoPago(e.target.value)}
+                >
+                  <option value="efectivo">Efectivo</option>
+                  <option value="transferencia">Transferencia</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -96,11 +140,11 @@ export function DeliveryModal({ isOpen, onClose, cortineroNombre, onSubmit }: De
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={submitting}>
               Cancelar
             </Button>
-            <Button type="submit" className="flex-1">
-              Registrar Entrega
+            <Button type="submit" className="flex-1" disabled={submitting}>
+              {submitting ? 'Registrando...' : 'Registrar Entrega'}
             </Button>
           </div>
         </form>

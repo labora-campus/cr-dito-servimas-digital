@@ -7,6 +7,8 @@ import Index from "./pages/Index";
 import Cortineros from "./pages/Cortineros";
 import CortineroProfile from "./pages/CortineroProfile";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -17,9 +19,31 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/cortineros" element={<Cortineros />} />
-          <Route path="/cortineros/:id" element={<CortineroProfile />} />
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Index />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cortineros"
+            element={
+              <ProtectedRoute>
+                <Cortineros />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cortineros/:id"
+            element={
+              <ProtectedRoute>
+                <CortineroProfile />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
