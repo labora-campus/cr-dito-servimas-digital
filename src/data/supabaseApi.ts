@@ -199,6 +199,7 @@ export async function createEntrega(args: {
   cortineroId: string;
   monto: number;
   descripcion: string;
+  comentarios?: string;
   fecha: string;
   createdBy: string;
 }): Promise<void> {
@@ -207,6 +208,7 @@ export async function createEntrega(args: {
     tipo: "entrega",
     importe: args.monto,
     descripcion: args.descripcion,
+    comentarios: args.comentarios || null,
     fecha: args.fecha,
     created_by: args.createdBy,
   });
@@ -285,6 +287,15 @@ export async function updateCortinero(id: string, args: {
       telefono: args.telefono || null,
       limite_credito: args.limiteCredito,
     })
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+export async function deleteMovimiento(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("movimientos")
+    .update({ voided_at: new Date().toISOString() })
     .eq("id", id);
 
   if (error) throw error;

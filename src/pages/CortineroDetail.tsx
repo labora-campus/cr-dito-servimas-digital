@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, MapPin, CreditCard, DollarSign, Package, FileDown, StickyNote, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Phone, MapPin, CreditCard, DollarSign, Package, FileDown, StickyNote, Trash2, Pencil, Briefcase } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,9 @@ import { MovimientoRow } from '@/components/MovimientoRow';
 import { PaymentModal } from '@/components/PaymentModal';
 import { DeliveryModal } from '@/components/DeliveryModal';
 import { SecurityPinModal } from '@/components/SecurityPinModal';
-import { AddNoteModal } from '@/components/AddNoteModal'; // Import
-import { EditCortineroModal } from '@/components/EditCortineroModal'; // Import
+import { AddNoteModal } from '@/components/AddNoteModal';
+import { EditCortineroModal } from '@/components/EditCortineroModal';
+import { BillingModal } from '@/components/BillingModal'; // Import
 import { createEntrega, createPago, getCortineroById, getMovimientosByCortinero, deleteCortinero, updateCortinero } from '@/data/supabaseApi';
 import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -21,8 +22,9 @@ export default function CortineroDetail() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showDeletePinModal, setShowDeletePinModal] = useState(false);
-  const [showAddNoteModal, setShowAddNoteModal] = useState(false); // State
-  const [showEditProfileModal, setShowEditProfileModal] = useState(false); // State
+  const [showAddNoteModal, setShowAddNoteModal] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [showBillingModal, setShowBillingModal] = useState(false); // State
 
   const queryClient = useQueryClient();
   const { user, loading: authLoading } = useAuth();
@@ -177,6 +179,61 @@ export default function CortineroDetail() {
       queryClient.invalidateQueries({ queryKey: ['cortinero', id] });
       queryClient.invalidateQueries({ queryKey: ['cortineros'] });
       toast({ title: 'Perfil actualizado', description: 'La información del cortinero ha sido actualizada.' });
+    }
+  });
+
+  const billingMutation = useMutation({
+    mutationFn: (data: {
+      destinatario: 'servimas' | 'cortinero';
+      monto: number;
+      nroFactura: string;
+      razonSocial: string;
+      neto: number;
+      iva: number;
+      fecha: string;
+    }) => {
+      if (!id) throw new Error('Missing cortinero id');
+      if (!user) throw new Error('No authenticated user');
+
+      const infoFactura = `Factura a 3ro: ${data.razonSocial} - #${data.nroFactura}`;
+      const detallesMontos = `Neto: ${formatCurrency(data.neto)}, IVA: ${formatCurrency(data.iva)}. Total Factura: ${formatCurrency(data.monto)}.`;
+
+      if (data.destinatario === 'servimas') {
+        // Case A: Servimas collected the money.
+        // We credit the NETO to the cortinero. (Servimas keeps the IVA to pay to tax authority).
+        return createPago({
+          cortineroId: id,
+          monto: data.neto,
+          metodoPago: `Factura ${data.nroFactura} (Cobro Servimas)`,
+          comentarios: `${infoFactura}. ${detallesMontos} Se abona el NETO pues Servimas retiene IVA.`,
+          fecha: data.fecha,
+          createdBy: user.id,
+        });
+      } else {
+        // Case B: Cortinero collected the money.
+        // We charge the IVA to the cortinero. (Because Cortinero has the IVA, and Servimas must pay it).
+        // This is a Debt increase (Entrega/Cargo).
+        return createEntrega({
+          cortineroId: id,
+          monto: data.iva,
+          descripcion: `Pago IVA Factura ${data.nroFactura} (Cobro Cortinero)`,
+          fecha: data.fecha,
+          createdBy: user.id,
+        });
+        // We might want to add comments to Entrega too, but createEntrega only takes descripcion.
+        // We'll put main info in descripcion.
+      }
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cortineros'] });
+      queryClient.invalidateQueries({ queryKey: ['cortinero', id] });
+      queryClient.invalidateQueries({ queryKey: ['movimientos', id] });
+
+      const description = variables.destinatario === 'servimas'
+        ? 'Se abonó el NETO a la cuenta.'
+        : 'Se cargó el IVA a la cuenta.';
+
+      toast({ title: 'Factura registrada', description });
     }
   });
 
@@ -357,6 +414,13 @@ export default function CortineroDetail() {
           <Package className="h-4 w-4 mr-2" />
           Registrar Entrega
         </Button>
+        <Button
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={() => setShowBillingModal(true)}
+        >
+          <Briefcase className="h-4 w-4 mr-2" />
+          Facturar a Tercero
+        </Button>
         <Button variant="outline" onClick={handleExportPDF}>
           <FileDown className="h-4 w-4 mr-2" />
           Exportar PDF
@@ -449,6 +513,12 @@ export default function CortineroDetail() {
         onClose={() => setShowEditProfileModal(false)}
         cortinero={cortinero}
         onSubmit={(data) => profileMutation.mutateAsync(data)}
+      />
+
+      <BillingModal
+        isOpen={showBillingModal}
+        onClose={() => setShowBillingModal(false)}
+        onSubmit={(data) => billingMutation.mutateAsync(data)}
       />
     </div>
   );
